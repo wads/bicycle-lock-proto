@@ -13,7 +13,7 @@ GPIO.setup(coil_A_2_pin, GPIO.OUT)
 GPIO.setup(coil_B_1_pin, GPIO.OUT)
 GPIO.setup(coil_B_2_pin, GPIO.OUT)
 
-forward_seq = ['1100', '0110', '0011', '1001']
+forward_seq = ['1010', '0110', '0101', '1001']
 reverse_seq = list(forward_seq)
 reverse_seq.reverse()
 
@@ -48,5 +48,4 @@ try:
         steps = raw_input("How many steps backwards? ")
         backwards(int(delay) / 1000.0, int(steps))
 except:
-    print("end")
     GPIO.cleanup()

@@ -1,27 +1,20 @@
-import RPi.GPIO as GPIO
-import time
+import spidev, time
 
-GPIO.setmode(GPIO.BCM)
+spi = spidev.SpiDev()
+spi.open(0, 0)
 
-out_x_pin = 2
-out_y_pin = 3
-out_z_pin = 4
-
-GPIO.setup(out_x_pin, GPIO.IN)
-GPIO.setup(out_y_pin, GPIO.IN)
-GPIO.setup(out_z_pin, GPIO.IN)
+def analog_read(channel):
+    r = spi.xfer2([0x06, channel << 6, 0])
+    adc_out = ((r[1]&3) << 8) + r[2]
+    return adc_out
 
 
 try:
     while True:
-        print(GPIO.input(out_x_pin))
-        print(GPIO.input(out_y_pin))
-        print(GPIO.input(out_z_pin))
-
-        #x = GPIO.input(out_x_pin)
-        #y = GPIO.input(out_y_pin)
-        #z = GPIO.input(out_z_pin)
-        #print('x=%d, y=%d, z=%d' % (x, y, z))
+        x = analog_read(0)
+        y = analog_read(1)
+        z = analog_read(2)
+        print ("x=%d, y=%d, z=%d" % (x, y, z))
         time.sleep(1)
 except:
-    GPIO.cleanup()
+    print "end\n"

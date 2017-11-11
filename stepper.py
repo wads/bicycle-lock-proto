@@ -4,8 +4,8 @@ import argparse
 
 # argument parser
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--direction", required = True, help = "direction")
-ap.add_argument("-s", "--step", required = True, help = "step num")
+ap.add_argument("-d", "--direction", required=True, help="direction")
+ap.add_argument("-s", "--step", required=True, help="step num")
 args = vars(ap.parse_args())
 
 

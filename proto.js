@@ -13,11 +13,9 @@ const coil_B_2_pin = new Gpio(18, 'out');
 const forward_seq = [[1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 0, 1]];
 
 const stepMotor = function(steps, sequence, delay) {
-    console.log('-- stepMotor --');
     let total_step = steps * sequence.length;
     for(let i = 0; i < total_step; i++) {
         setTimeout(function(write_values) {
-            console.log(write_values);
             coil_A_1_pin.writeSync(write_values[0]);
             coil_A_2_pin.writeSync(write_values[1]);
             coil_B_1_pin.writeSync(write_values[2]);
@@ -27,13 +25,11 @@ const stepMotor = function(steps, sequence, delay) {
 };
 
 const forwardStepMotor = function(steps, delay) {
-    console.log('-- forwardStepMotor --');
     stepMotor(steps, forward_seq, delay);
 };
 
 const backwardStepMotor = function(steps, delay) {
-    console.log('-- backwardStepMotor --');
-    stepMotor(steps, forward_seq.reverse(), delay);
+    stepMotor(steps, forward_seq.slice().reverse(), delay);
 };
 
 // Service name
@@ -67,18 +63,15 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
     const direction = instruction[0];
     const steps = instruction[1];
 
-    //const cmd = 'python stepper.py -d ' + direction + ' -s ' + (steps * 2);
-    //console.log(cmd);
-    //const execSync = require('child_process').execSync;
-    //const result = execSync(cmd);
-
-    setCurrent([0, 0, 0, 0])
+    coil_A_1_pin.writeSync(0);
+    coil_A_2_pin.writeSync(0);
+    coil_B_1_pin.writeSync(0);
+    coil_B_2_pin.writeSync(0);
     if(direction === 'l') {
         forwardStepMotor(steps * 2, 10);
     } else {
         backwardStepMotor(steps * 2, 10);
     }
-
     callback(this.RESULT_SUCCESS);
 };
 
@@ -105,7 +98,6 @@ bleno.on('advertisingStart', function(err) {
         bleno.setServices([moveService]);
     }
 });
-
 
 process.on('SIGINT', function () {
     coil_A_1_pin.unexport();

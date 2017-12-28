@@ -1,0 +1,13 @@
+{
+  "name": "lock-prototypeing-rpi",
+  "version": "2.1.0",
+  "description": "bicycle lock prototype on raspberry pi",
+  "private": true,
+  "dependencies": {
+    "bleno": "^0.4.2",
+    "onoff": "^1.1.8",
+    "spi-device": "^1.0.1"
+  },
+  "devDependencies": {},
+  "author": "Yoshitaka Wada",
+}

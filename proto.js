@@ -3,6 +3,47 @@
 const Gpio = require('onoff').Gpio;
 const bleno = require('bleno');
 const util = require('util');
+const spi = require('spi-device');
+
+//
+// photoreflector
+//
+const value_buffer = [];
+const MAX_VALUE_BUFFER_SIZE = 100;
+
+const in_data = [
+    new Buffer([0x06, 0x00, 0x00]), // ch1
+    new Buffer([0x06, 0x40, 0x00]), // ch2
+    new Buffer([0x06, 0x80, 0x00]), // ch3
+    new Buffer([0x06, 0xc0, 0x00])  // ch4
+];
+
+const message_data = function(ch) {
+    return {
+        sendBuffer: in_data[ch],
+        receiveBuffer: new Buffer(3),
+        byteLength: 3,
+        speedHz: 10000
+    };
+};
+
+const readValue = function(ch) {
+    mcp3204.transfer([message_data(ch)], function (err, msg) {
+        if (err) throw err;
+        let rawValue = ((msg[0].receiveBuffer[1] & 0x0f) << 8) +
+                           msg[0].receiveBuffer[2];
+
+        if(value_buffer.length >= MAX_VALUE_BUFFER_SIZE) {
+            value_buffer.pop();
+        }
+        value_buffer.unshift(rawValue);
+    });
+};
+
+const mcp3204 = spi.open(0, 0, function (err) {
+    if (err) throw err;
+    setInterval(readValue, 100, 0);
+});
 
 // stepper motor
 const coil_A_1_pin = new Gpio(14, 'out');

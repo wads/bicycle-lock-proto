@@ -45,7 +45,9 @@ const mcp3204 = spi.open(0, 0, function (err) {
     setInterval(readValue, 100, 0);
 });
 
+//
 // stepper motor
+//
 const coil_A_1_pin = new Gpio(14, 'out');
 const coil_A_2_pin = new Gpio(15, 'out');
 const coil_B_1_pin = new Gpio(17, 'out');
@@ -73,6 +75,48 @@ const backwardStepMotor = function(steps, delay) {
     stepMotor(steps, forward_seq.slice().reverse(), delay);
 };
 
+//
+// operation
+//
+const setDefaultPosition = function() {
+    if(value_buffer.length < 30) {
+        setTimeout(setDefaultPosition, 3000);
+        return;
+    }
+    // TODO sampleの中にnullやundefinedが入っていた時の対応
+    const sample = value_buffer.slice(0, 30);
+    const value_avg = sample.reduce(function(prev, current, i, arr) {
+        return prev + current;
+    }) / sample.length;
+    let value_range = Math.max.apply(null, sample) - Math.min.apply(null, sample);
+    if(!value_range) {
+        value_range = 10; // TODO: default value
+    }
+
+    console.log('avg: ' + value_avg);
+    console.log('range: ' + value_range);
+
+    const interval = 50; // msec
+    const fd = setInterval(forwardStepMotor, interval, 1, 10);
+    const monitor = function(retry_cnt) {
+        console.log('monitor, current=' + value_buffer[0] + ' count=' + retry_cnt);
+        const threshold = value_avg - (value_range * 5);
+        if(value_buffer[0] <= threshold) {
+            clearTimeout(fd);
+        } else if(retry_cnt < 60) {
+            setTimeout(monitor, interval, ++retry_cnt);
+        } else {
+            console.log('timeout setDefaultPosition');
+            clearTimeout(fd);
+        }
+    };
+    setTimeout(monitor, interval, 0);
+};
+
+//
+// bleno
+//
+
 // Service name
 // maximun 26 bytes
 const name = 'lock_proto';
@@ -98,21 +142,33 @@ LockCharc.prototype.onReadRequest = function(offset, callback) {
 };
 
 LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, callback) {
-    console.log('onWriteRequest');
+    console.log('onWriteRequest: ' + data.toString('utf8'));
 
     const instruction = data.toString('utf8').split(':');
-    const direction = instruction[0];
-    const steps = instruction[1];
+    const operation = instruction[0];
+    const value = instruction[1];
 
     coil_A_1_pin.writeSync(0);
     coil_A_2_pin.writeSync(0);
     coil_B_1_pin.writeSync(0);
     coil_B_2_pin.writeSync(0);
-    if(direction === 'l') {
-        forwardStepMotor(steps * 2, 10);
-    } else {
-        backwardStepMotor(steps * 2, 10);
+
+    switch(operation) {
+    case 'l':
+        forwardStepMotor(value, 10);
+        break;
+    case 'r':
+        backwardStepMotor(value, 10);
+        break;
+    case 'd':
+        // 動かした直後はvalue_bufferの値が安定していないので少し待つ
+        setTimeout(setDefaultPosition, 3000);
+        break;
+    default:
+        console.log('unknown operation');
+        // TODO callbackの内容を検討
     }
+
     callback(this.RESULT_SUCCESS);
 };
 

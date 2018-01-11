@@ -11,38 +11,46 @@ const spi = require('spi-device');
 const value_buffer = [];
 const MAX_VALUE_BUFFER_SIZE = 100;
 
-const in_data = [
+const tx_data_list = [
     new Buffer([0x06, 0x00, 0x00]), // ch1
     new Buffer([0x06, 0x40, 0x00]), // ch2
     new Buffer([0x06, 0x80, 0x00]), // ch3
     new Buffer([0x06, 0xc0, 0x00])  // ch4
 ];
 
-const message_data = function(ch) {
+const tx_data = function(channel) {
     return {
-        sendBuffer: in_data[ch],
+        sendBuffer: tx_data_list[channel],
         receiveBuffer: new Buffer(3),
-        byteLength: 3,
-        speedHz: 10000
+        byteLength: 3
     };
 };
 
-const readValue = function(ch) {
-    mcp3204.transfer([message_data(ch)], function (err, msg) {
-        if (err) throw err;
-        let rawValue = ((msg[0].receiveBuffer[1] & 0x0f) << 8) +
-                           msg[0].receiveBuffer[2];
+const extract_value = function(message) {
+    return ((message.receiveBuffer[1] & 0x0f) << 8) + message.receiveBuffer[2];
+}
 
-        if(value_buffer.length >= MAX_VALUE_BUFFER_SIZE) {
-            value_buffer.pop();
+const readValue = function(channel) {
+    mcp3204.transfer([tx_data(channel)], function (err, msg) {
+        if (err) throw err;
+
+        if(value_buffer[channel].length >= MAX_VALUE_BUFFER_SIZE) {
+            value_buffer[channel].pop();
         }
-        value_buffer.unshift(rawValue);
+        value_buffer[channel].unshift(extract_value(msg[0]));
     });
 };
 
+const readyToRead = function() {
+    return value_buffer[0].length < 30 || value_buffer[1].length < 30;
+}
+
 const mcp3204 = spi.open(0, 0, function (err) {
     if (err) throw err;
+    value_buffer[0] = [];
+    value_buffer[1] = [];
     setInterval(readValue, 100, 0);
+    setInterval(readValue, 100, 1);
 });
 
 //
@@ -76,32 +84,35 @@ const backwardStepMotor = function(steps, delay) {
 };
 
 //
-// operation
+// lock movement controller
 //
 const setDefaultPosition = function() {
-    if(value_buffer.length < 30) {
-        setTimeout(setDefaultPosition, 3000);
+    if(readyToRead()) {
+        setTimeout(setDefaultPosition, 1000);
         return;
     }
     // TODO sampleの中にnullやundefinedが入っていた時の対応
-    const sample = value_buffer.slice(0, 30);
-    const value_avg = sample.reduce(function(prev, current, i, arr) {
-        return prev + current;
-    }) / sample.length;
-    let value_range = Math.max.apply(null, sample) - Math.min.apply(null, sample);
-    if(!value_range) {
-        value_range = 10; // TODO: default value
-    }
+    const sample = [value_buffer[0].slice(0, 10), value_buffer[1].slice(0, 10)];
+    const value_avg = sample.map((values, idx, arr) => {
+        return values.reduce((prev, current, i, arr) => {
+            return prev + current;
+        });
+    }).map((value, idx, arr) => value/sample[idx].length);
+    let value_range = sample.map((values, idx, arr) => {
+        let range = Math.max.apply(null, values) - Math.min.apply(null, values);
+        if(!range) {
+            range = 10; // TODO: default value
+        }
+        return range;
+    });
 
-    console.log('avg: ' + value_avg);
-    console.log('range: ' + value_range);
-
+    // 片側のみ対応
     const interval = 50; // msec
     const fd = setInterval(forwardStepMotor, interval, 1, 10);
     const monitor = function(retry_cnt) {
-        console.log('monitor, current=' + value_buffer[0] + ' count=' + retry_cnt);
-        const threshold = value_avg - (value_range * 5);
-        if(value_buffer[0] <= threshold) {
+        console.log('monitor, current=' + value_buffer[0][0] + ' count=' + retry_cnt);
+        const threshold = value_avg[0] - (value_range[0] * 5);
+        if(value_buffer[0][0] <= threshold) {
             clearTimeout(fd);
         } else if(retry_cnt < 60) {
             setTimeout(monitor, interval, ++retry_cnt);
@@ -155,14 +166,17 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
 
     switch(operation) {
     case 'l':
+        console.log('move left');
         forwardStepMotor(value, 10);
         break;
     case 'r':
+        console.log('move right');
         backwardStepMotor(value, 10);
         break;
     case 'd':
+        console.log('set default');
         // 動かした直後はvalue_bufferの値が安定していないので少し待つ
-        setTimeout(setDefaultPosition, 3000);
+        setTimeout(setDefaultPosition, 1000);
         break;
     default:
         console.log('unknown operation');

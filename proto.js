@@ -8,9 +8,11 @@ const spi = require('spi-device');
 //
 // photoreflector
 //
-const value_buffer = [];
-const MAX_VALUE_BUFFER_SIZE = 100;
-
+const COLLECTOR_BUFFER_SIZE = 100;
+const CHANNEL_SIZE = 4;
+const COLLECT_INTERVAL_MSEC = 100;
+const collector_buffer = new Array(CHANNEL_SIZE);
+const interval_ids = new Array(CHANNEL_SIZE);
 const tx_data_list = [
     new Buffer([0x06, 0x00, 0x00]), // ch1
     new Buffer([0x06, 0x40, 0x00]), // ch2
@@ -18,7 +20,7 @@ const tx_data_list = [
     new Buffer([0x06, 0xc0, 0x00])  // ch4
 ];
 
-const tx_data = function(channel) {
+const txData = function(channel) {
     return {
         sendBuffer: tx_data_list[channel],
         receiveBuffer: new Buffer(3),
@@ -26,31 +28,47 @@ const tx_data = function(channel) {
     };
 };
 
-const extract_value = function(message) {
+const extractValue = function(message) {
     return ((message.receiveBuffer[1] & 0x0f) << 8) + message.receiveBuffer[2];
-}
+};
 
-const readValue = function(channel) {
-    mcp3204.transfer([tx_data(channel)], function (err, msg) {
+const startCollectValue = function(channels) {
+    if(!Array.isArray(channels)) {
+        channels = [channels];
+    }
+
+    for(let ch of channels) {
+        if(!Number.isInteger(ch) || ch < 0 || ch > CHANNEL_SIZE) continue;
+        resetCollectValue(ch);
+        interval_ids[ch] = setInterval(collectValue, COLLECT_INTERVAL_MSEC, ch);
+    }
+};
+
+const resetCollectValue = function(ch) {
+    if(interval_ids[ch]) {
+        clearInterval(interval_ids[ch]);
+    }
+    collector_buffer[ch] = [];
+};
+
+const collectValue = function(channel) {
+    mcp3204.transfer([txData(channel)], function (err, msg) {
         if (err) throw err;
 
-        if(value_buffer[channel].length >= MAX_VALUE_BUFFER_SIZE) {
-            value_buffer[channel].pop();
+        if(collector_buffer[channel].length >= COLLECTOR_BUFFER_SIZE) {
+            collector_buffer[channel].pop();
         }
-        value_buffer[channel].unshift(extract_value(msg[0]));
+        collector_buffer[channel].unshift(extractValue(msg[0]));
     });
 };
 
 const readyToRead = function() {
-    return value_buffer[0].length < 30 || value_buffer[1].length < 30;
+    return collector_buffer[0].length < 30 || collector_buffer[1].length < 30;
 }
 
 const mcp3204 = spi.open(0, 0, function (err) {
     if (err) throw err;
-    value_buffer[0] = [];
-    value_buffer[1] = [];
-    setInterval(readValue, 100, 0);
-    setInterval(readValue, 100, 1);
+    startCollectValue([0, 1]);
 });
 
 //
@@ -92,7 +110,7 @@ const setDefaultPosition = function() {
         return;
     }
     // TODO sampleの中にnullやundefinedが入っていた時の対応
-    const sample = [value_buffer[0].slice(0, 10), value_buffer[1].slice(0, 10)];
+    const sample = [collector_buffer[0].slice(0, 10), collector_buffer[1].slice(0, 10)];
     const value_avg = sample.map((values, idx, arr) => {
         return values.reduce((prev, current, i, arr) => {
             return prev + current;
@@ -110,9 +128,9 @@ const setDefaultPosition = function() {
     const interval = 50; // msec
     const fd = setInterval(forwardStepMotor, interval, 1, 10);
     const monitor = function(retry_cnt) {
-        console.log('monitor, current=' + value_buffer[0][0] + ' count=' + retry_cnt);
+        console.log('monitor, current=' + collector_buffer[0][0] + ' count=' + retry_cnt);
         const threshold = value_avg[0] - (value_range[0] * 5);
-        if(value_buffer[0][0] <= threshold) {
+        if(collector_buffer[0][0] <= threshold) {
             clearTimeout(fd);
         } else if(retry_cnt < 60) {
             setTimeout(monitor, interval, ++retry_cnt);
@@ -175,7 +193,7 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
         break;
     case 'd':
         console.log('set default');
-        // 動かした直後はvalue_bufferの値が安定していないので少し待つ
+        // 動かした直後はcollector_bufferの値が安定していないので少し待つ
         setTimeout(setDefaultPosition, 1000);
         break;
     default:

@@ -104,7 +104,39 @@ const backwardStepMotor = function(steps, delay) {
 //
 // lock movement controller
 //
+const fs = require('fs');
+const conf_file = './conf.json';
+let conf = {};
+const readConfFile = function() {
+    fs.readFile(conf_file, 'utf8', (err, text) => {
+        if(!text) {
+            text = '{}';
+        }
+
+        try {
+            conf = JSON.parse(text);
+            console.log(conf);
+        } catch(e) {
+            conf = {};
+        }
+    });
+};
+readConfFile();
+
+const writeConfFile = function() {
+    fs.writeFile(conf_file, JSON.stringify(conf), (err) => {
+        if(err){
+            console.log("Faild write conf: "+ err);
+        }
+    });
+}
+
 const setDefaultPosition = function() {
+    conf['position'] = 0;
+    writeConfFile();
+};
+
+const openLock = function() {
     if(readyToRead()) {
         setTimeout(setDefaultPosition, 1000);
         return;
@@ -183,18 +215,25 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
     coil_B_2_pin.writeSync(0);
 
     switch(operation) {
-    case 'l':
+    case 'l': // move left
         console.log('move left');
         forwardStepMotor(value, 10);
         break;
-    case 'r':
+    case 'r': // move right
         console.log('move right');
         backwardStepMotor(value, 10);
         break;
-    case 'd':
-        console.log('set default');
+    case 'd': // set default position
+        console.log('set default position');
+        setDefaultPosition();
+        break;
+    case 'o': // open lock. same as move default
+        console.log('open lock');
         // 動かした直後はcollector_bufferの値が安定していないので少し待つ
-        setTimeout(setDefaultPosition, 1000);
+        setTimeout(openLock, 1000);
+        break;
+    case 'c': // close lock
+        console.log('close lock');
         break;
     default:
         console.log('unknown operation');

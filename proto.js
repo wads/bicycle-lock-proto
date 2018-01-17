@@ -79,11 +79,11 @@ const coil_A_2_pin = new Gpio(15, 'out');
 const coil_B_1_pin = new Gpio(17, 'out');
 const coil_B_2_pin = new Gpio(18, 'out');
 
+// rotate clockwise
 const forward_seq = [[1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 0, 1]];
 
-const stepMotor = function(steps, sequence, delay) {
-    let total_step = steps * sequence.length;
-    for(let i = 0; i < total_step; i++) {
+const step = function(steps, sequence, delay) {
+    for(let i = 0; i < steps; i++) {
         setTimeout(function(write_values) {
             coil_A_1_pin.writeSync(write_values[0]);
             coil_A_2_pin.writeSync(write_values[1]);
@@ -93,12 +93,14 @@ const stepMotor = function(steps, sequence, delay) {
     }
 };
 
-const forwardStepMotor = function(steps, delay) {
-    stepMotor(steps, forward_seq, delay);
+const forwardStep = function(steps, delay) {
+    const total_steps = steps * forward_seq.length;
+    step(total_steps, forward_seq, delay);
 };
 
-const backwardStepMotor = function(steps, delay) {
-    stepMotor(steps, forward_seq.slice().reverse(), delay);
+const backwardStep = function(steps, delay) {
+    const total_steps = steps * forward_seq.length;
+    step(total_steps, forward_seq.slice().reverse(), delay);
 };
 
 //
@@ -106,6 +108,8 @@ const backwardStepMotor = function(steps, delay) {
 //
 const fs = require('fs');
 const conf_file = './conf.json';
+const STEP_DELAY = 10;
+
 let conf = {};
 const readConfFile = function() {
     fs.readFile(conf_file, 'utf8', (err, text) => {
@@ -131,12 +135,40 @@ const writeConfFile = function() {
     });
 }
 
-const setDefaultPosition = function() {
-    conf['position'] = 0;
-    writeConfFile();
+const getPosition = function() {
+    return conf['position'];
 };
 
-const openLock = function() {
+const setPosition = function(pos) {
+    if(Number.isInteger(pos)) {
+        conf['position'] = pos;
+        writeConfFile();
+    }
+};
+
+const setDefaultPosition = function() {
+    setPosition(0);
+};
+
+const forwardStepMotor = function(steps) {
+    steps = parseInt(steps);
+    if(Number.isInteger(steps)) {
+        forwardStep(steps, STEP_DELAY);
+        setPosition(getPosition() - steps);
+    }
+    console.log('current pos: ' + getPosition());
+};
+
+const backwardStepMotor = function(steps) {
+    steps = parseInt(steps);
+    if(Number.isInteger(steps)) {
+        backwardStep(steps, STEP_DELAY);
+        setPosition(getPosition() + steps);
+    }
+    console.log('current pos: ' + getPosition());
+};
+
+const closeLock = function() {
     if(readyToRead()) {
         setTimeout(setDefaultPosition, 1000);
         return;
@@ -150,6 +182,7 @@ const openLock = function() {
     }).map((value, idx, arr) => value/sample[idx].length);
     let value_range = sample.map((values, idx, arr) => {
         let range = Math.max.apply(null, values) - Math.min.apply(null, values);
+
         if(!range) {
             range = 10; // TODO: default value
         }
@@ -172,6 +205,14 @@ const openLock = function() {
         }
     };
     setTimeout(monitor, interval, 0);
+};
+
+const openLock = function() {
+    const current_position = getPosition();
+    if(current_position <= 0) {
+        console.log('openLock: Now lock is open');
+    }
+    forwardStepMotor(getPosition());
 };
 
 //
@@ -217,11 +258,11 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
     switch(operation) {
     case 'l': // move left
         console.log('move left');
-        forwardStepMotor(value, 10);
+        backwardStepMotor(value);
         break;
     case 'r': // move right
         console.log('move right');
-        backwardStepMotor(value, 10);
+        forwardStepMotor(value);
         break;
     case 'd': // set default position
         console.log('set default position');
@@ -229,11 +270,12 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
         break;
     case 'o': // open lock. same as move default
         console.log('open lock');
-        // 動かした直後はcollector_bufferの値が安定していないので少し待つ
-        setTimeout(openLock, 1000);
+        openLock();
         break;
     case 'c': // close lock
         console.log('close lock');
+        // 動かした直後はcollector_bufferの値が安定していないので少し待つ
+        setTimeout(closeLock, 1000);
         break;
     default:
         console.log('unknown operation');

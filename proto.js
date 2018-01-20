@@ -160,7 +160,7 @@ const range_values = function(samples) {
 const fs = require('fs');
 const conf_file = './conf.json';
 const STEP_DELAY = 10;
-const MAX_FORWARD_POSITION = 60;
+const MAX_FORWARD_POSITION = 30;
 const FORWARD_INTERVAL = 50; // msec
 
 let conf = {};
@@ -189,6 +189,11 @@ const writeConfFile = function() {
 }
 
 const getPosition = function() {
+    // TODO
+    // 初期設定でsetDefaultPosition()するようにしたら削除する
+    if(isNaN(conf['position'])) {
+        conf['position'] = 0;
+    }
     return conf['position'];
 };
 
@@ -231,27 +236,29 @@ const openLock = function() {
 
 const closeLock = function() {
     if(readyToRead()) {
-        setTimeout(setDefaultPosition, 1000);
+        setTimeout(closeLock, 1000);
         return;
     }
 
     const samples = getSamples();
-    const avg_values = avg_values(samples);
-    const range_values = range_values(samples);
-    const threshold = avg_values[0] - (range_values[0] * 5);
-
-    const fd = setInterval(forwardStepMotor, FORWARD_INTERVAL, 1, 10);
+    const avgs = avg_values(samples);
+    const ranges = range_values(samples);
+    const threshold = avgs[0] - (ranges[0] * 5);
+    let fd;
 
     const monitor = function(threshold, retry_cnt) {
         console.log('monitor, current=' + collector_buffer[0][0] + ' count=' + retry_cnt);
-        if(getPosition() > MAX_FORWARD_POSITION) {
-            console.log('setDefaultPosition: max forward position.');
+        if(retry_cnt == 0) {
+            fd = setInterval(backwardStepMotor, FORWARD_INTERVAL, 1, 10);
+        }
+        if(getPosition() >= MAX_FORWARD_POSITION) {
+            console.log('closeLock: max forward position.');
             clearTimeout(fd);
             return;
         }
 
-        if(retry_cnt > 60) {
-            console.log('setDefaultPosition: timeout.');
+        if(retry_cnt >= 100) {
+            console.log('closeLock: timeout.');
             clearTimeout(fd);
             return;
         }
@@ -259,8 +266,7 @@ const closeLock = function() {
         if(collector_buffer[0][0] <= threshold) {
             clearTimeout(fd);
         }
-
-        setTimeout(monitor, FORWARD_INTERVAL, ++retry_cnt);
+        setTimeout(monitor, FORWARD_INTERVAL, threshold, ++retry_cnt);
     };
     setTimeout(monitor, FORWARD_INTERVAL, threshold, 0);
 };
@@ -296,6 +302,12 @@ LockCharc.prototype.onReadRequest = function(offset, callback) {
 LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, callback) {
     console.log('onWriteRequest: ' + data.toString('utf8'));
 
+    // TODO
+    // 以下の場合はdefault positionが必要だとcentralに返す
+    // 1. getPosition()がundefinedの場合
+    // 2. getPosition()の値が明らかにおかしい場合
+    //
+
     const instruction = data.toString('utf8').split(':');
     const operation = instruction[0];
     const value = instruction[1];
@@ -324,8 +336,8 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
         break;
     case 'c': // close lock
         console.log('close lock');
-        // 動かした直後はcollector_bufferの値が安定していないので少し待つ
-        setTimeout(closeLock, 1000);
+        resetCollectValue();
+        closeLock();
         break;
     default:
         console.log('unknown operation');

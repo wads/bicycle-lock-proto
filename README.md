@@ -8,7 +8,7 @@ node
 
 ```
 $ sudo yum install bluez bluez-libs bluez-libs-devel
-$ npm install bleno
+$ npm install
 ```
 
 ## Start BLE peripherals

@@ -2,8 +2,20 @@
 
 const Gpio = require('onoff').Gpio;
 const bleno = require('bleno');
-const util = require('util');
 const spi = require('spi-device');
+const util = require('util');
+
+const spg27_1101 = require('./stepper_motor/spg27_1101');
+
+const GPIO_14 = 14;
+const GPIO_15 = 15;
+const GPIO_17 = 17;
+const GPIO_18 = 18;
+
+const stepper = new spg27_1101(new Gpio(GPIO_14, 'out'),
+                               new Gpio(GPIO_15, 'out'),
+                               new Gpio(GPIO_17, 'out'),
+                               new Gpio(GPIO_18, 'out'));
 
 //
 // photoreflector
@@ -27,38 +39,6 @@ const extractValue = function(message) {
     return ((message.receiveBuffer[1] & 0x0f) << 8) + message.receiveBuffer[2];
 };
 
-
-//
-// stepper motor
-//
-const coil_A_1_pin = new Gpio(14, 'out');
-const coil_A_2_pin = new Gpio(15, 'out');
-const coil_B_1_pin = new Gpio(17, 'out');
-const coil_B_2_pin = new Gpio(18, 'out');
-
-// rotate clockwise
-const forward_seq = [[1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 0, 1]];
-
-const step = function(steps, sequence, delay) {
-    for(let i = 0; i < steps; i++) {
-        setTimeout(function(write_values) {
-            coil_A_1_pin.writeSync(write_values[0]);
-            coil_A_2_pin.writeSync(write_values[1]);
-            coil_B_1_pin.writeSync(write_values[2]);
-            coil_B_2_pin.writeSync(write_values[3]);
-        }, delay * i, sequence[i % sequence.length]);
-    }
-};
-
-const forwardStep = function(steps, delay) {
-    const total_steps = steps * forward_seq.length;
-    step(total_steps, forward_seq, delay);
-};
-
-const backwardStep = function(steps, delay) {
-    const total_steps = steps * forward_seq.length;
-    step(total_steps, forward_seq.slice().reverse(), delay);
-};
 
 //
 // corrector
@@ -211,7 +191,7 @@ const setDefaultPosition = function() {
 const forwardStepMotor = function(steps) {
     steps = parseInt(steps);
     if(Number.isInteger(steps)) {
-        forwardStep(steps, STEP_DELAY);
+        stepper.forwardStep(steps, STEP_DELAY);
         setPosition(getPosition() - steps);
     }
     console.log('current pos: ' + getPosition());
@@ -220,7 +200,7 @@ const forwardStepMotor = function(steps) {
 const backwardStepMotor = function(steps) {
     steps = parseInt(steps);
     if(Number.isInteger(steps)) {
-        backwardStep(steps, STEP_DELAY);
+        stepper.backwardStep(steps, STEP_DELAY);
         setPosition(getPosition() + steps);
     }
     console.log('current pos: ' + getPosition());
@@ -312,10 +292,7 @@ LockCharc.prototype.onWriteRequest = function(data, offset, withoutResponse, cal
     const operation = instruction[0];
     const value = instruction[1];
 
-    coil_A_1_pin.writeSync(0);
-    coil_A_2_pin.writeSync(0);
-    coil_B_1_pin.writeSync(0);
-    coil_B_2_pin.writeSync(0);
+    stepper.reset();
 
     switch(operation) {
     case 'l': // move left
@@ -372,8 +349,5 @@ bleno.on('advertisingStart', function(err) {
 });
 
 process.on('SIGINT', function () {
-    coil_A_1_pin.unexport();
-    coil_A_2_pin.unexport();
-    coil_B_1_pin.unexport();
-    coil_B_2_pin.unexport();
+    stepper.unbind_gpio();
 });

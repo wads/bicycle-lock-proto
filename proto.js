@@ -2,17 +2,16 @@
 
 const Gpio = require('onoff').Gpio;
 const bleno = require('bleno');
-const spi = require('spi-device');
 const util = require('util');
 
-const spg27_1101 = require('./stepper_motor/spg27_1101');
+const Spg27_1101 = require('./stepper_motor/spg27_1101');
 
 const GPIO_14 = 14;
 const GPIO_15 = 15;
 const GPIO_17 = 17;
 const GPIO_18 = 18;
 
-const stepper = new spg27_1101(new Gpio(GPIO_14, 'out'),
+const stepper = new Spg27_1101(new Gpio(GPIO_14, 'out'),
                                new Gpio(GPIO_15, 'out'),
                                new Gpio(GPIO_17, 'out'),
                                new Gpio(GPIO_18, 'out'));
@@ -20,6 +19,8 @@ const stepper = new spg27_1101(new Gpio(GPIO_14, 'out'),
 //
 // photoreflector
 //
+
+const spi = require('spi-device');
 const tx_data_list = [
     new Buffer([0x06, 0x00, 0x00]), // ch1
     new Buffer([0x06, 0x40, 0x00]), // ch2
@@ -39,6 +40,10 @@ const extractValue = function(message) {
     return ((message.receiveBuffer[1] & 0x0f) << 8) + message.receiveBuffer[2];
 };
 
+const mcp3204 = spi.open(0, 0, function (err) {
+    if (err) throw err;
+    startCollectValue([0, 1]);
+});
 
 //
 // corrector
@@ -93,11 +98,6 @@ const collectValue = function(channel) {
 const readyToRead = function() {
     return collector_buffer[0].length < 30 || collector_buffer[1].length < 30;
 }
-
-const mcp3204 = spi.open(0, 0, function (err) {
-    if (err) throw err;
-    startCollectValue([0, 1]);
-});
 
 const getSamples = function() {
     // TODO sampleの中にnullやundefinedが入っていた時の対応

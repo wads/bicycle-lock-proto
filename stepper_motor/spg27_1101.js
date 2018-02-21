@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 // rotate clockwise
 const forward_seq = [[1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 0, 1]];

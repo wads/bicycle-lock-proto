@@ -3,6 +3,9 @@
 // rotate clockwise
 const forward_seq = [[1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 0, 1]];
 
+/**
+ * Stepper motor
+ */
 class Spg27_1101 {
     /**
      * constructor
@@ -14,6 +17,10 @@ class Spg27_1101 {
      */
     constructor(gpio1, gpio2, gpio3, gpio4) {
         this.bind_gpio(gpio1, gpio2, gpio3, gpio4);
+    }
+
+    toString() {
+        return 'spg_1101';
     }
 
     bind_gpio(gpio1, gpio2, gpio3, gpio4) {

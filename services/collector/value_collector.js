@@ -1,25 +1,24 @@
-const ValueCollectable = require('value_collectable');
+'use strict';
+
+import ValueCollectable from 'value_collectable';
 
 const DEFAULT_BUFFER_SIZE = 100;
 const DEFAULT_INTERVAL_MSEC = 100;
 
 // exception functions
-function IllegalInterfaceException(module) {
-    this.message = `Illegal module interface (${module})`;
-    this.name = "InvalidChannelException";
+class IllegalInterfaceException extends Error {
 }
 
-class ValueCollector extends EventEmitter {
+export default class ValueCollector extends EventEmitter {
     // moudle should have 'readValue' method
     constructor(module, opt) {
-        //if(!module.readValue) {
         if(!(module instanceof ValueCollectable)) {
-            throw new IllegalInterfaceException(module);
+            const message = `Illegal module interface (${module})`;
+            throw new IllegalInterfaceException(message);
         }
         this.module = module;
         this.buffer = [];
 
-        // TODO: private化
         if(opt['buffer_size']) {
             this.buffer_size = opt['buffer_size'];
         } else {
@@ -45,9 +44,13 @@ class ValueCollector extends EventEmitter {
             this.buffer.unshift(this.module.readValue());
         }, DEFAULT_INTERVAL_MSEC);
 
-        setTimeout(() => {
-            this.emit('start');
-        }, DEFAULT_INTERVAL_MSEC);
+        this.emit('start');
+        console.log('event start');
+    }
+
+    restart() {
+        this.stop();
+        this.start();
     }
 
     clear() {
@@ -58,6 +61,7 @@ class ValueCollector extends EventEmitter {
         if(this.interval_id) {
             clearInterval(this.interval_id);
             this.emit('pause');
+            console.log('event pause');
         }
     }
 
@@ -68,5 +72,3 @@ class ValueCollector extends EventEmitter {
 
     get buffer() { return this.buffer; }
 }
-
-module.exports = ValueCollector;

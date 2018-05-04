@@ -3,10 +3,12 @@
 // rotate clockwise
 const forward_seq = [[1, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 1], [1, 0, 0, 1]];
 
+const DEFAULT_STEP_DELAY = 10;
+
 /**
  * Stepper motor
  */
-class Spg27_1101 {
+export default class Spg27_1101 {
     /**
      * constructor
      *
@@ -38,12 +40,12 @@ class Spg27_1101 {
         this.connector1.unexport();
     }
 
-    forwardStep(steps, delay) {
+    forwardStep(steps, delay=DEFAULT_STEP_DELAY) {
         const total_steps = steps * forward_seq.length;
         this.step(total_steps, forward_seq, delay);
     }
 
-    backwardStep(steps, delay) {
+    backwardStep(steps, delay=DEFAULT_STEP_DELAY) {
         const total_steps = steps * forward_seq.length;
         this.step(total_steps, forward_seq.slice().reverse(), delay);
     }
@@ -68,5 +70,3 @@ class Spg27_1101 {
         this.connector1.writeSync(values[3]);
     }
 }
-
-module.exports = Spg27_1101;

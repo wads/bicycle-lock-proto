@@ -24,7 +24,7 @@ function ChannelIsAlreadyBindingException(ch) {
     this.name = "ChannelIsAlreadyBindingException";
 }
 
-class Mcp3204 extends spi {
+export default class Mcp3204 extends spi {
     static CH1 = 1;
     static CH2 = 2;
     static CH3 = 3;
@@ -96,5 +96,3 @@ class Mcp3204 extends spi {
         return !this.binding[Mcp3204.channelIndex(ch)];
     }
 }
-
-module.exports = Mcp3204;
